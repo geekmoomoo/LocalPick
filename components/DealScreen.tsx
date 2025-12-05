@@ -22,6 +22,17 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
   const dragStartX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Helper to safely vibrate (prevents crashes in restricted iframes/environments)
+  const safeVibrate = (pattern: number | number[]) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(pattern);
+      }
+    } catch (e) {
+      // Ignore vibration errors in restricted contexts
+    }
+  };
+
   // Simulate real-time inventory dropping
   useEffect(() => {
     if (isTorn) return;
@@ -145,7 +156,7 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
     if (isTorn || remaining === 0) return;
     setIsDragging(true);
     dragStartX.current = clientX;
-    if (navigator.vibrate) navigator.vibrate(10);
+    safeVibrate(10);
   };
 
   const handleMove = (clientX: number) => {
@@ -160,7 +171,7 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
 
     if (dragX > 100) {
       setIsTorn(true);
-      if (navigator.vibrate) navigator.vibrate([30, 50, 80]);
+      safeVibrate([30, 50, 80]);
       triggerConfetti();
     } else {
       setDragX(0);
@@ -174,6 +185,17 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
   const onTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientX);
   const onTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientX);
   const onTouchEnd = () => handleEnd();
+
+  // Drag Progress Calculation for Animation (0 to 1)
+  const dragProgress = Math.min(dragX / 100, 1);
+
+  // Dynamic Emoji based on tension
+  const getTensionEmoji = () => {
+      if (dragProgress < 0.2) return "😐"; // Start
+      if (dragProgress < 0.5) return "😬"; // Little tension
+      if (dragProgress < 0.8) return "😖"; // Harder
+      return "😫"; // Almost there
+  };
 
   return (
     <div 
@@ -294,11 +316,33 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
                  </div>
             </div>
 
+            {/* PART 1.5: EMOJI LAYER (Between Stub and Ticket) */}
+            {/* This layer sits under the right ticket and reveals itself when dragged */}
+            <div 
+                className="absolute left-[30%] top-0 bottom-0 z-15 flex items-center justify-center overflow-hidden pointer-events-none"
+                style={{ 
+                    width: `${dragX}px`, // Grows with drag
+                    opacity: isTorn ? 0 : 1
+                }}
+            >
+                <div 
+                    className="flex items-center justify-center"
+                    style={{
+                        transform: `scale(${0.5 + (dragProgress * 1.0)})`, // Scales up from 0.5 to 1.5
+                        transition: 'transform 0.1s linear'
+                    }}
+                >
+                    <span className="text-3xl filter drop-shadow-sm select-none">
+                        {getTensionEmoji()}
+                    </span>
+                </div>
+            </div>
+
             {/* PART 2: RIGHT TICKET (Draggable) */}
             <div 
                 className={`absolute left-[30%] top-0 bottom-0 right-0 z-20
                   rounded-r-xl overflow-hidden cursor-grab active:cursor-grabbing touch-none
-                  flex items-center justify-between px-4
+                  flex items-center 
                   ${isTorn ? 'bg-gray-200' : remaining === 0 ? 'bg-gray-400' : 'bg-white coupon-pattern'}
                 `}
                 style={{
@@ -309,7 +353,9 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
                     opacity: isTorn ? 0 : 1,
                     pointerEvents: isTorn ? 'none' : 'auto',
                     WebkitMaskImage: 'radial-gradient(circle at 100% 50%, transparent 10px, black 10.5px)',
-                    maskImage: 'radial-gradient(circle at 100% 50%, transparent 10px, black 10.5px)'
+                    maskImage: 'radial-gradient(circle at 100% 50%, transparent 10px, black 10.5px)',
+                    // Changed justify-between to ensure left alignment of content
+                    justifyContent: 'flex-start' 
                 }}
                 onMouseDown={onMouseDown}
                 onTouchStart={onTouchStart}
@@ -320,26 +366,24 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
                 {remaining === 0 ? (
                     <span className="w-full text-center font-bold text-gray-100 text-lg">선착순 마감되었습니다</span>
                 ) : (
-                    <>
-                        <div className="flex flex-col items-start pl-2">
-                            <span className="text-sm font-bold text-gray-900">쿠폰 뜯어서 받기</span>
-                            <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                                <Clock size={10} /> {timeLeft}
-                            </span>
+                    <div className="w-full h-full relative flex items-center">
+                        {/* NORMAL STATE UI (Always visible now) */}
+                        <div 
+                            className="absolute inset-0 flex items-center justify-between px-4"
+                        >
+                             <div className="flex flex-col items-start pl-2">
+                                <span className="text-sm font-bold text-gray-900">쿠폰 뜯어서 받기</span>
+                                <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                    <Clock size={10} /> {timeLeft}
+                                </span>
+                            </div>
+                            <div className="flex items-center text-gray-400">
+                                <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'0ms'}}/>
+                                <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'100ms'}}/>
+                                <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'200ms'}}/>
+                            </div>
                         </div>
-                        
-                        <div className="flex items-center gap-1">
-                            {isDragging ? (
-                                <span className="text-xs font-bold text-red-500 animate-pulse whitespace-nowrap">계속 당기세요!</span>
-                            ) : (
-                                <div className="flex items-center text-gray-400">
-                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'0ms'}}/>
-                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'100ms'}}/>
-                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'200ms'}}/>
-                                </div>
-                            )}
-                        </div>
-                    </>
+                    </div>
                 )}
             </div>
 

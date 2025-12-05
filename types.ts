@@ -19,6 +19,19 @@ export interface Deal {
   restaurant: Restaurant;
 }
 
+export interface Coupon {
+  id: string;
+  dealId: string;
+  title: string;
+  restaurantName: string;
+  discountAmount: number;
+  imageUrl: string;
+  status: 'AVAILABLE' | 'USED';
+  claimedAt: Date;
+  usedAt?: Date;
+  expiresAt: Date;
+}
+
 export enum AppTab {
   SEARCH = 'SEARCH',
   COUPONS = 'COUPONS',

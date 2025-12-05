@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, CheckCircle, Share2, Heart, ChevronsRight } from 'lucide-react';
+import { Clock, CheckCircle, Share2, Heart, ChevronRight, MapPin } from 'lucide-react';
 import { Deal } from '../types';
 
 interface DealScreenProps {
@@ -9,9 +9,12 @@ interface DealScreenProps {
 
 export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => {
   const [remaining, setRemaining] = useState(deal.remainingCoupons);
-  const [isTorn, setIsTorn] = useState(false); // Replaces simple isClaimed for visual state
-  const [recentBuyer, setRecentBuyer] = useState<string | null>(null);
+  const [isTorn, setIsTorn] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
+  
+  // Favorite Button State
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isHeartPopping, setIsHeartPopping] = useState(false);
   
   // Drag Physics State
   const [dragX, setDragX] = useState(0);
@@ -31,19 +34,6 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
     return () => clearInterval(interval);
   }, [isTorn]);
 
-  // Simulate "Social Proof" Ticker
-  useEffect(() => {
-    const names = ['김*민', '이*서', '박*준', '최*우', '정*윤'];
-    const interval = setInterval(() => {
-      if (Math.random() > 0.6) {
-        const randomName = names[Math.floor(Math.random() * names.length)];
-        setRecentBuyer(randomName);
-        setTimeout(() => setRecentBuyer(null), 3000); 
-      }
-    }, 8000); 
-    return () => clearInterval(interval);
-  }, []);
-
   // Timer Countdown Logic
   useEffect(() => {
     const updateTimer = () => {
@@ -60,7 +50,7 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
       const minutes = Math.floor((diff / (1000 * 60)) % 60);
       
       const minStr = minutes.toString().padStart(2, '0');
-      setTimeLeft(`${hours}시 ${minStr}분 남음`);
+      setTimeLeft(`${hours}시간 ${minStr}분 남음`);
     };
 
     updateTimer();
@@ -70,20 +60,24 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
 
   const formattedDiscount = new Intl.NumberFormat('ko-KR').format(deal.discountAmount);
 
-  // Calculate dates and claim order
-  const today = new Date();
-  const validPeriod = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일 ~ ${deal.expiresAt.getFullYear()}년 ${deal.expiresAt.getMonth() + 1}월 ${deal.expiresAt.getDate()}일 까지`;
-  const claimOrder = deal.totalCoupons - remaining + 1;
+  // --- Toggle Favorite Handler ---
+  const toggleFavorite = () => {
+      setIsFavorite(prev => !prev);
+      if (!isFavorite) {
+          setIsHeartPopping(true);
+          setTimeout(() => setIsHeartPopping(false), 500); 
+      }
+  };
 
-  // --- Confetti & Particle Effects (Ported) ---
+  // --- Confetti & Particle Effects ---
   const triggerConfetti = useCallback(() => {
     const colors = ['#fde047', '#facc15', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899'];
     
-    // 1. Paper Pieces (From Tear Point)
+    // 1. Paper Pieces
     const rect = containerRef.current?.getBoundingClientRect();
     if (rect) {
-        const tearX = rect.left + (rect.width * 0.32); // 32% split point
-        const tearY = rect.top + (rect.height / 2) + 100; // Approximate vertical center of screen or coupon
+        const tearX = rect.left + (rect.width * 0.32); 
+        const tearY = rect.bottom - 100; // Adjusted for bottom position
 
         for (let i = 0; i < 30; i++) {
             const piece = document.createElement('div');
@@ -117,12 +111,12 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
     }
 
     // 2. Full Screen Confetti
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 60; i++) {
         const confetti = document.createElement('div');
         confetti.style.position = 'fixed';
         confetti.style.zIndex = '9999';
         confetti.style.pointerEvents = 'none';
-        const size = Math.random() * 10 + 5;
+        const size = Math.random() * 8 + 4;
         const isCircle = Math.random() > 0.5;
         confetti.style.width = `${size}px`;
         confetti.style.height = isCircle ? `${size}px` : `${size * 2}px`;
@@ -134,7 +128,7 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
 
         const drift = (Math.random() - 0.5) * 200;
         const rotation = Math.random() * 720 - 360;
-        const duration = Math.random() * 2000 + 2000;
+        const duration = Math.random() * 1500 + 1500;
         const delay = Math.random() * 500;
 
         confetti.animate([
@@ -164,32 +158,26 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
     if (!isDragging || isTorn) return;
     setIsDragging(false);
 
-    // Threshold to tear (e.g., 100px)
     if (dragX > 100) {
-      // TEAR IT!
       setIsTorn(true);
       if (navigator.vibrate) navigator.vibrate([30, 50, 80]);
       triggerConfetti();
     } else {
-      // Snap back
       setDragX(0);
     }
   };
 
-  // Mouse Handlers
   const onMouseDown = (e: React.MouseEvent) => handleStart(e.clientX);
   const onMouseMove = (e: React.MouseEvent) => handleMove(e.clientX);
   const onMouseUp = () => handleEnd();
   const onMouseLeave = () => handleEnd();
-
-  // Touch Handlers
   const onTouchStart = (e: React.TouchEvent) => handleStart(e.touches[0].clientX);
   const onTouchMove = (e: React.TouchEvent) => handleMove(e.touches[0].clientX);
   const onTouchEnd = () => handleEnd();
 
   return (
     <div 
-      className="relative w-full h-full flex flex-col justify-between overflow-hidden bg-gray-900 select-none"
+      className="relative w-full h-full flex flex-col justify-end overflow-hidden bg-gray-900 select-none"
       ref={containerRef}
       onMouseMove={isDragging ? onMouseMove : undefined}
       onMouseUp={isDragging ? onMouseUp : undefined}
@@ -198,99 +186,109 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
       onTouchEnd={isDragging ? onTouchEnd : undefined}
     >
       
-      {/* Background Image */}
+      {/* --- Full Screen Background Image --- */}
       <div className="absolute inset-0 z-0">
         <img 
           src={deal.imageUrl} 
           alt={deal.title} 
           className="w-full h-full object-cover"
         />
-        {/* Gradients */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/80 to-transparent pointer-events-none" />
-        <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+        {/* Gradients for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/90 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-3/4 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
       </div>
 
-      {/* Share Button */}
-      <div className="absolute top-6 right-6 z-50">
-        <button className="text-white/60 drop-shadow-md transition-transform active:scale-95 p-2 hover:text-white/80">
-           <Share2 size={28} />
+      {/* Top Bar: Share (Notification moved to App.tsx) */}
+      <div className="absolute top-0 left-0 right-0 p-6 pt-12 flex justify-end items-start z-30">
+        <button className="text-white/80 drop-shadow-md active:scale-95 hover:text-white transition-colors">
+           <Share2 size={24} />
         </button>
       </div>
 
-      {/* Social Proof */}
-      {recentBuyer && (
-        <div className="absolute top-4 left-4 z-40 animate-fade-in-down">
-          <div className="bg-black/60 backdrop-blur-md text-white/90 text-xs px-3 py-1.5 rounded-full flex items-center border border-white/10 shadow-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-            <span><b>{recentBuyer}</b>님이 방금 쿠폰을 받았습니다!</span>
-          </div>
-        </div>
-      )}
-
-      {/* Top Spacer */}
-      <div className="relative z-10 pt-24 px-6"></div>
-
-      {/* Bottom Content Area */}
-      <div className="relative z-20 px-6 pb-28 w-full flex flex-col gap-4">
+      {/* --- Main Content Area (Bottom) --- */}
+      <div className="relative z-20 px-6 pb-24 w-full flex flex-col gap-3">
         
-        {/* Title & Discount */}
-        <div className="text-left mb-2 pointer-events-none">
-           <h1 className="text-4xl font-black text-white leading-tight drop-shadow-lg mb-1">{deal.title}</h1>
-           <div className="flex items-center gap-2">
-             <span className="text-yellow-400 font-bold text-2xl drop-shadow-md">{formattedDiscount}원 할인</span>
+        {/* Title */}
+        <div className="text-left">
+           <h1 className="text-3xl font-black text-white leading-tight drop-shadow-lg break-keep">
+              {deal.title}
+           </h1>
+           
+           <div className="mt-1 flex items-baseline gap-2">
+             <span className="text-yellow-400 font-bold text-3xl drop-shadow-md">{formattedDiscount}원 할인</span>
            </div>
         </div>
 
-        {/* Store Info */}
-        <div className="flex justify-between items-center text-white/90 text-sm font-medium drop-shadow-md mb-2 pointer-events-none">
-            <div className="flex items-center gap-2">
-                <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-xs">{deal.restaurant.category}</span>
-                <span>{deal.restaurant.name}</span>
-                <div className="flex items-center gap-1 bg-red-500/20 px-2 py-0.5 rounded-full border border-red-500/30 ml-1">
-                   <Heart size={10} className="fill-red-500 text-red-500" />
-                   <span className="text-[10px] font-bold text-red-400">매장 즐겨찾기</span>
-                </div>
+        {/* Store Info & Favorite Button Row (Moved Below Price) */}
+        <div className="flex justify-between items-center mt-2">
+             <div className="flex items-center gap-2 text-white/90 text-sm font-medium drop-shadow-md">
+                <span className="bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold text-[10px]">{deal.restaurant.category}</span>
+                <span className="text-white font-bold">{deal.restaurant.name}</span>
             </div>
-            <span>{deal.restaurant.distance}m</span>
+
+            {/* Favorite Button (Pill Style) */}
+            <button 
+              onClick={toggleFavorite}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all duration-300 active:scale-95 shadow-sm backdrop-blur-sm
+                 ${isFavorite 
+                    ? 'bg-red-500/80 border-red-500/30' 
+                    : 'bg-white/10 border-white/20 hover:bg-white/20'
+                 }
+              `}
+            >
+               <Heart 
+                 size={12} 
+                 className={`transition-all duration-300
+                    ${isFavorite ? 'fill-white text-white' : 'text-white'}
+                    ${isHeartPopping ? 'animate-heart-burst' : ''}
+                 `} 
+               />
+               <span className="text-[10px] font-bold text-white">
+                 {isFavorite ? '즐겨찾는 매장' : '즐겨찾기 추가'}
+               </span>
+            </button>
         </div>
 
-        {/* --- COUPON CONTAINER --- */}
-        <div className="relative w-full h-24">
+        {/* Distance Info (Moved Below Store Info, Right above Coupon) */}
+        <div className="flex items-center gap-2 text-xs text-gray-300 mb-1">
+             <span className="flex items-center gap-1">
+               <MapPin size={10} /> {deal.restaurant.distance}m
+             </span>
+        </div>
+
+        {/* --- TEAR COUPON UI --- */}
+        <div className="relative w-full h-20 shadow-2xl">
+            {/* Paper Texture Pattern */}
+            <svg width="0" height="0">
+              <filter id="paper-texture">
+                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="5" result="noise" />
+                <feDiffuseLighting in="noise" lightingColor="#fff" surfaceScale="2">
+                  <feDistantLight azimuth="45" elevation="60" />
+                </feDiffuseLighting>
+              </filter>
+            </svg>
             
             {/* PART 1: LEFT STUB (Static) */}
-            <div className={`absolute left-0 top-0 bottom-0 w-[32%] z-10 
-              rounded-l-lg overflow-hidden drop-shadow-xl flex flex-col items-center justify-center border-r-2 border-dashed border-stone-300
-              ${isTorn ? 'bg-stone-300' : 'bg-[#fcfaf4]'}
+            <div className={`absolute left-0 top-0 bottom-0 w-[30%] z-10 
+              rounded-l-xl overflow-hidden flex flex-col items-center justify-center border-r-2 border-dashed border-gray-300/50
+              ${isTorn ? 'bg-gray-200' : 'bg-white coupon-pattern'}
             `}
             style={{
-                WebkitMaskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12.5px)',
-                maskImage: 'radial-gradient(circle at 0px 50%, transparent 12px, black 12.5px)'
+                WebkitMaskImage: 'radial-gradient(circle at 0px 50%, transparent 10px, black 10.5px)',
+                maskImage: 'radial-gradient(circle at 0px 50%, transparent 10px, black 10.5px)'
             }}
             >
-                 {/* Paper Texture */}
-                 <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
-                 
-                 {/* Stub Content */}
-                 {!isTorn && (
-                     <div className="border border-red-600 text-red-600 px-1 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider mb-1 -rotate-2 bg-red-50/50">
-                        마감임박
-                     </div>
-                 )}
-                 <div className={`text-[10px] font-medium leading-tight text-center w-full px-1 ${isTorn ? 'text-stone-500' : 'text-stone-600'}`}>
+                 <div className={`text-center w-full px-1 flex flex-col items-center justify-center h-full ${isTorn ? 'opacity-50' : ''}`}>
                     {isTorn ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUseCoupon?.();
-                          }}
-                          className="w-full flex flex-col items-center justify-center active:scale-95 transition-transform"
-                        >
-                            <span className="leading-tight text-[11px] font-black text-stone-700 border-b-2 border-stone-700/20 pb-0.5">쿠폰<br/>사용하기</span>
-                        </button>
+                         <span className="text-xs font-bold text-gray-500">사용<br/>완료</span>
                     ) : (
                         <>
-                            잔여수량<br/>
-                            <span className="text-xl font-bold font-serif text-red-700">{remaining}</span>
+                            <span className="text-[10px] text-gray-500 font-medium mb-0.5">남은수량</span>
+                            <span className="text-2xl font-black text-red-600 leading-none">{remaining}</span>
+                            {/* Updated Label: Auto width for fit */}
+                            <div className="mt-1 px-3 py-1 bg-red-100 text-red-600 text-[9px] font-bold rounded-full animate-pulse">
+                                마감임박
+                            </div>
                         </>
                     )}
                  </div>
@@ -298,70 +296,66 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
 
             {/* PART 2: RIGHT TICKET (Draggable) */}
             <div 
-                className={`absolute left-[32%] top-0 bottom-0 right-0 z-20
-                  rounded-r-lg overflow-hidden drop-shadow-xl cursor-grab active:cursor-grabbing touch-none
-                  ${isTorn ? 'bg-stone-300' : remaining === 0 ? 'bg-stone-500' : 'bg-[#fcfaf4]'}
+                className={`absolute left-[30%] top-0 bottom-0 right-0 z-20
+                  rounded-r-xl overflow-hidden cursor-grab active:cursor-grabbing touch-none
+                  flex items-center justify-between px-4
+                  ${isTorn ? 'bg-gray-200' : remaining === 0 ? 'bg-gray-400' : 'bg-white coupon-pattern'}
                 `}
                 style={{
                     transform: isTorn 
-                        ? `translateX(${dragX + 40}px) rotate(${dragX * 0.1}deg)` 
-                        : `translateX(${dragX}px) rotate(${dragX * 0.05}deg)`,
-                    transition: isDragging ? 'none' : 'opacity 0.4s ease-out, transform 0.4s ease-out',
+                        ? `translateX(${dragX + 60}px) rotate(${dragX * 0.15}deg) translateY(20px)` 
+                        : `translateX(${dragX}px)`,
+                    transition: isDragging ? 'none' : 'opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     opacity: isTorn ? 0 : 1,
                     pointerEvents: isTorn ? 'none' : 'auto',
-                    WebkitMaskImage: 'radial-gradient(circle at 100% 50%, transparent 12px, black 12.5px)',
-                    maskImage: 'radial-gradient(circle at 100% 50%, transparent 12px, black 12.5px)'
+                    WebkitMaskImage: 'radial-gradient(circle at 100% 50%, transparent 10px, black 10.5px)',
+                    maskImage: 'radial-gradient(circle at 100% 50%, transparent 10px, black 10.5px)'
                 }}
                 onMouseDown={onMouseDown}
                 onTouchStart={onTouchStart}
             >
-                {/* Paper Texture */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
+                {/* Dashed line on the left to match stub */}
+                <div className="absolute left-0 top-2 bottom-2 w-px border-l border-dashed border-gray-300"></div>
 
-                {/* Inner Border (Only top, bottom, right) */}
-                <div className="absolute inset-1.5 left-0 border-t border-b border-r border-dashed border-stone-300 rounded-r-[4px] pointer-events-none"></div>
-
-                {/* Content */}
-                <div className="flex flex-col items-center justify-center h-full w-full pl-2 pr-4">
-                    {isTorn ? (
-                         <div className="flex items-center gap-2 text-stone-500">
-                             <CheckCircle size={24} />
-                             <span className="text-xl font-bold">발급완료</span>
-                         </div>
-                    ) : remaining === 0 ? (
-                        <span className="text-xl font-bold text-stone-200">선착순 마감</span>
-                    ) : (
-                        <div className="text-center w-full">
-                            <span className="block text-2xl font-black text-stone-800 tracking-tight select-none">
-                                쿠폰 받기
+                {remaining === 0 ? (
+                    <span className="w-full text-center font-bold text-gray-100 text-lg">선착순 마감되었습니다</span>
+                ) : (
+                    <>
+                        <div className="flex flex-col items-start pl-2">
+                            <span className="text-sm font-bold text-gray-900">쿠폰 뜯어서 받기</span>
+                            <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                <Clock size={10} /> {timeLeft}
                             </span>
-                            <div className="flex items-center justify-center text-[10px] text-stone-500 mt-1 gap-1 select-none">
-                                {isDragging ? (
-                                    <span className="text-red-500 font-bold animate-pulse">더 당겨주세요!</span>
-                                ) : (
-                                    <>
-                                        <ChevronsRight size={12} className="animate-pulse text-stone-400" />
-                                        <span>밀어서 뜯기</span>
-                                        <Clock size={10} className="ml-2" />
-                                        <span>{timeLeft}</span>
-                                    </>
-                                )}
-                            </div>
                         </div>
-                    )}
-                </div>
+                        
+                        <div className="flex items-center gap-1">
+                            {isDragging ? (
+                                <span className="text-xs font-bold text-red-500 animate-pulse whitespace-nowrap">계속 당기세요!</span>
+                            ) : (
+                                <div className="flex items-center text-gray-400">
+                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'0ms'}}/>
+                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'100ms'}}/>
+                                     <ChevronRight size={16} className="animate-flow-arrow" style={{animationDelay:'200ms'}}/>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
 
-            {/* Success State Replacement (Transparent background, white text) */}
+            {/* Success Message Layer (Revealed when torn) */}
             {isTorn && (
-                <div className="absolute left-[32%] top-0 bottom-0 right-0 flex flex-col items-center justify-center z-0">
-                     <div className="flex items-center gap-2 text-white animate-fade-in-up">
-                         <CheckCircle size={24} className="text-white drop-shadow-md" />
-                         <span className="text-xl font-black drop-shadow-md">쿠폰 사용기간</span>
+                <div className="absolute left-[30%] top-0 bottom-0 right-0 flex flex-col items-center justify-center z-0 animate-fade-in-up">
+                     <div className="flex items-center gap-1.5 text-green-400 mb-1">
+                         <CheckCircle size={18} className="fill-green-400 text-gray-900" />
+                         <span className="text-base font-bold text-white shadow-black drop-shadow-md">쿠폰 발급 완료!</span>
                      </div>
-                     <div className="text-white/80 text-[10px] mt-2 font-medium drop-shadow-md animate-fade-in-up" style={{animationDelay: '0.1s'}}>
-                        {validPeriod}
-                     </div>
+                     <button 
+                        onClick={(e) => { e.stopPropagation(); onUseCoupon?.(); }}
+                        className="bg-white text-black text-xs font-bold px-3 py-1.5 rounded-full shadow-lg active:scale-95 transition-transform"
+                     >
+                        지금 사용하러 가기
+                     </button>
                 </div>
             )}
             
@@ -369,12 +363,39 @@ export const DealScreen: React.FC<DealScreenProps> = ({ deal, onUseCoupon }) => 
       </div>
 
       <style>{`
-        .animate-fade-in-up {
-            animation: fadeInUp 0.5s ease-out forwards;
+        .animate-fade-in-down { animation: fadeInDown 0.5s ease-out forwards; }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes flowArrow {
+            0% { opacity: 0.3; transform: translateX(0); }
+            50% { opacity: 1; transform: translateX(3px); color: #ef4444; }
+            100% { opacity: 0.3; transform: translateX(0); }
         }
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .animate-flow-arrow { animation: flowArrow 1.5s infinite ease-in-out; }
+        @keyframes heartBurst {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+        .animate-heart-burst { animation: heartBurst 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
+        /* New Coupon Pattern Animation */
+        .coupon-pattern {
+            background-color: #ffffff;
+            background-image: repeating-linear-gradient(
+                45deg,
+                #f8fafc,
+                #f8fafc 10px,
+                #ffffff 10px,
+                #ffffff 20px
+            );
+            background-size: 28px 28px;
+            animation: moveStripes 20s linear infinite;
+        }
+        @keyframes moveStripes {
+            from { background-position: 0 0; }
+            to { background-position: 56px 0; }
         }
       `}</style>
     </div>
